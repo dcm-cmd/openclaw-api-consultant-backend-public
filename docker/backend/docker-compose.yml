@@ -1,0 +1,59 @@
+services:
+  backend:
+    build:
+      context: ../..
+      dockerfile: docker/backend/Dockerfile
+    image: openclaw-api-consultant-backend:local
+    container_name: openclaw-api-consultant-backend
+    restart: unless-stopped
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000
+    ports:
+      - "${BACKEND_BIND:-127.0.0.1}:${BACKEND_PORT:-8000}:8000"
+    volumes:
+      - ../..:/app
+      - ${BACKEND_OPENCLAW_STATE_HOST_PATH:-../openclaw-api-consultant/state}:${BACKEND_OPENCLAW_STATE_DIR:-/openclaw-state}:ro
+    env_file:
+      - ../../.env
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      PYTHONDONTWRITEBYTECODE: "1"
+      PYTHONUNBUFFERED: "1"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health')"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+  db:
+    image: postgres:15-alpine
+    container_name: openclaw-api-consultant-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-openclaw_consultant}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+    volumes:
+      - ../../runtime/postgres:/var/lib/postgresql/data
+      - ../../sql/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-openclaw_consultant}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  # PostgREST — RESTful API for PostgreSQL (Docker internal network only)
+  db-api:
+    image: postgrest/postgrest:v12.2.3
+    container_name: openclaw-api-consultant-db-api
+    restart: unless-stopped
+    environment:
+      PGRST_DB_URI: postgres://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-openclaw_consultant}
+      PGRST_DB_SCHEMA: api
+      PGRST_DB_ANON_ROLE: anon
+      PGRST_SERVER_PORT: "3000"
+    depends_on:
+      - db

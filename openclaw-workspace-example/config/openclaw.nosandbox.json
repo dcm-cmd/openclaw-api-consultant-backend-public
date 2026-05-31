@@ -1,0 +1,99 @@
+{
+  // ============================================================
+  // openclaw-api-consultant — 无沙箱方案
+  // ============================================================
+  //
+  // 适用环境：Docker Desktop Windows/Mac 或不需要沙箱隔离的场景
+  // 无需前置条件
+  //
+  // 安全模型：
+  //   L1 硬限制 — tools.fs.workspaceOnly: true（read 限制到 workspace 目录）
+  //   L2 软约束 — AGENTS.md 禁止读取系统文件
+  //   L3 输出兜底 — 后端 _sanitize_assistant_content() 替换敏感输出
+  //
+  // SKILL.md 文件路径使用 data/company/xxx.md（workspace 相对路径）
+  // ============================================================
+
+  gateway: {
+    mode: "local",
+    bind: "lan",
+    auth: {
+      mode: "token",
+      token: "${OPENCLAW_GATEWAY_TOKEN}",
+    },
+    controlUi: {
+      allowedOrigins: [
+        "http://localhost:18889",
+        "http://127.0.0.1:18889",
+      ],
+    },
+    tools: {
+      allow: ["sessions_send", "read"],
+    },
+  },
+
+  hooks: {
+    enabled: true,
+    token: "${OPENCLAW_HOOKS_TOKEN}",
+    path: "/hooks",
+    defaultSessionKey: "hook:consultant:default",
+    allowRequestSessionKey: true,
+    allowedSessionKeyPrefixes: ["hook:consultant:"],
+    mappings: [
+      {
+        match: { path: "consultant" },
+        action: "agent",
+        agentId: "consultant-main",
+        deliver: false,
+      },
+    ],
+  },
+
+  // models — 由部署环境 .env 决定
+
+  tools: {
+    profile: "messaging",
+    sessions: {
+      visibility: "all",
+    },
+    agentToAgent: {
+      enabled: true,
+    },
+    alsoAllow: ["sessions_send", "read"],
+    deny: [
+      "group:runtime",
+      "write",
+      "edit",
+      "apply_patch",
+      "group:web",
+      "group:nodes",
+      "browser",
+      "canvas",
+      "cron",
+      "gateway",
+      "sessions_history",
+      "sessions_list",
+      "session_status",
+    ],
+    fs: {
+      workspaceOnly: true,
+    },
+  },
+
+  agents: {
+    defaults: {
+      workspace: "/home/node/.openclaw/workspace",
+      model: { primary: "${OPENCLAW_MODEL_PRIMARY}" },
+      models: {
+        "${OPENCLAW_MODEL_PRIMARY}": {},
+      },
+    },
+    list: [
+      {
+        id: "consultant-main",
+        default: true,
+        workspace: "/home/node/.openclaw/workspace/consultant-main",
+      },
+    ],
+  },
+}

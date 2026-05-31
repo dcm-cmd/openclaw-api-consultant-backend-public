@@ -1,0 +1,114 @@
+{
+  // ============================================================
+  // openclaw-api-consultant — Sandbox 方案（Linux 原生 Docker）
+  // ============================================================
+  //
+  // 适用环境：Linux 原生 Docker（非 Docker Desktop）
+  // 前置条件：见 config/README.md
+  //
+  // 安全模型：Docker 沙箱完全进程隔离 + data/scripts 只读挂载 + exec 仅允许特定脚本
+  // ============================================================
+
+  gateway: {
+    mode: "local",
+    bind: "lan",
+    auth: {
+      mode: "token",
+      token: "${OPENCLAW_GATEWAY_TOKEN}",
+    },
+    controlUi: {
+      allowedOrigins: [
+        "http://localhost:18889",
+        "http://127.0.0.1:18889",
+      ],
+    },
+    tools: {
+      allow: ["sessions_send", "read", "exec"],
+    },
+  },
+
+  hooks: {
+    enabled: true,
+    token: "${OPENCLAW_HOOKS_TOKEN}",
+    path: "/hooks",
+    defaultSessionKey: "hook:consultant:default",
+    allowRequestSessionKey: true,
+    allowedSessionKeyPrefixes: ["hook:consultant:"],
+    mappings: [
+      {
+        match: { path: "consultant" },
+        action: "agent",
+        agentId: "consultant-main",
+        deliver: false,
+      },
+    ],
+  },
+
+  // models — 由部署环境 .env 决定
+
+  tools: {
+    profile: "messaging",
+    exec: {
+      safeBins: ["python3"],
+      safeBinProfiles: {
+        python3: {
+          minPositional: 1,
+          maxPositional: 1,
+          allowedValueFlags: [],
+          deniedFlags: ["-c", "-m", "-i", "-I", "--command"],
+        },
+      },
+      safeBinTrustedDirs: ["/usr/local/bin", "/usr/bin"],
+    },
+    sessions: {
+      visibility: "all",
+    },
+    agentToAgent: {
+      enabled: true,
+    },
+    alsoAllow: ["sessions_send", "read", "exec"],
+    deny: [
+      "write",
+      "edit",
+      "apply_patch",
+      "group:web",
+      "group:nodes",
+      "browser",
+      "canvas",
+      "cron",
+      "gateway",
+      "sessions_history",
+      "sessions_list",
+      "session_status",
+    ],
+  },
+
+  agents: {
+    defaults: {
+      workspace: "/home/node/.openclaw/workspace",
+      model: { primary: "${OPENCLAW_MODEL_PRIMARY}" },
+      models: {
+        "${OPENCLAW_MODEL_PRIMARY}": {},
+      },
+    },
+    list: [
+      {
+        id: "consultant-main",
+        default: true,
+        workspace: "/home/node/.openclaw/workspace/consultant-main",
+        sandbox: {
+          mode: "all",
+          scope: "agent",
+          workspaceAccess: "none",
+          docker: {
+            binds: [
+              "/home/node/.openclaw/workspace/consultant-main/data:/data:ro",
+              "/home/node/.openclaw/workspace/consultant-main/scripts:/scripts:ro",
+            ],
+            network: "${COMPOSE_NETWORK}",
+          },
+        },
+      },
+    ],
+  },
+}

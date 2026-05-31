@@ -1,0 +1,65 @@
+services:
+  openclaw-gateway:
+    image: ${OPENCLAW_IMAGE:-openclaw-api-consultant:local}
+    container_name: openclaw-api-consultant
+    restart: unless-stopped
+    init: true
+    env_file:
+      - .env
+    environment:
+      HOME: /home/node
+      TERM: xterm-256color
+      TZ: ${OPENCLAW_TZ:-Asia/Shanghai}
+      OPENCLAW_GATEWAY_TOKEN: ${OPENCLAW_GATEWAY_TOKEN}
+      OPENCLAW_HOOKS_TOKEN: ${OPENCLAW_HOOKS_TOKEN}
+      OPENCLAW_MODEL_PRIMARY: ${OPENCLAW_MODEL_PRIMARY}
+      OPENCLAW_HOST_DATA_DIR: ${OPENCLAW_HOST_DATA_DIR}
+      OPENCLAW_DISABLE_BONJOUR: ${OPENCLAW_DISABLE_BONJOUR:-1}
+    volumes:
+      - ./state:/home/node/.openclaw
+      - ./state/workspace:/home/node/.openclaw/workspace
+      - ./auth-profile-secrets:/home/node/.config/openclaw
+      - /var/run/docker.sock:/var/run/docker.sock
+    ports:
+      - "127.0.0.1:${OPENCLAW_GATEWAY_PORT:-18889}:18889"
+      - "127.0.0.1:${OPENCLAW_BRIDGE_PORT:-18890}:18890"
+    command: ["gateway"]
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:18789/healthz').then((r) => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  openclaw-cli:
+    image: ${OPENCLAW_IMAGE:-openclaw-api-consultant:local}
+    container_name: openclaw-api-consultant-cli
+    profiles: ["ops"]
+    network_mode: "service:openclaw-gateway"
+    env_file:
+      - .env
+    environment:
+      HOME: /home/node
+      TERM: xterm-256color
+      TZ: ${OPENCLAW_TZ:-Asia/Shanghai}
+      OPENCLAW_GATEWAY_TOKEN: ${OPENCLAW_GATEWAY_TOKEN}
+      OPENCLAW_HOOKS_TOKEN: ${OPENCLAW_HOOKS_TOKEN}
+      OPENCLAW_MODEL_PRIMARY: ${OPENCLAW_MODEL_PRIMARY}
+      BROWSER: echo
+    volumes:
+      - ./state:/home/node/.openclaw
+      - ./state/workspace:/home/node/.openclaw/workspace
+      - ./auth-profile-secrets:/home/node/.config/openclaw
+    stdin_open: true
+    tty: true
+    init: true
+    entrypoint: ["openclaw"]
+    depends_on:
+      openclaw-gateway:
+        condition: service_healthy
